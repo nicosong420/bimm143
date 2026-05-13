@@ -1,0 +1,320 @@
+---
+title: "class07"
+author: "Nicolas Song"
+format: pdf
+---
+
+Generate some data
+
+```{r}
+tmp_x <- c(rnorm(15,2), rnorm(15,2))
+tmp_y <- c(rnorm(15,2), rnorm(15,-2))
+
+df <- cbind(x=tmp_x, y=tmp_y)
+
+View(df)
+```
+
+Plot the data
+
+```{r}
+plot(df)
+```
+
+Letʼs do a k-means clustering analysis
+
+```{r}
+km <- kmeans(df, 2, nstart=20)
+
+km
+```
+
+```{r}
+attributes(km)
+```
+
+**Q: Number of points per cluster?**
+
+```{r}
+km$size
+```
+
+Q: Cluster size? km\$size
+
+Q: Cluster assignment
+
+```{r}
+km$cluster
+```
+
+```{r}
+table(km$cluster)
+```
+
+Q: Cluster? centers
+
+```{r}
+km$centers
+```
+
+Plot k-means clustering:
+
+```{r}
+plot(df, col=c("RED", "BLACK")[km$cluster])
+points(km$centers, col="BLUE", pch="X")
+```
+
+Plot with ggplot:
+
+```{r}
+library(ggplot2)
+
+ggplot(df) +
+  aes(x, y, col=factor(km$cluster)) + 
+  geom_point() + 
+  scale_color_manual(values=c("red", "black")) + 
+  geom_point(data=km$centers, col="blue", shape="X", 
+             size=3, aes(x, y))
+```
+
+# Hierarchical clustering
+
+Analyze by hclust
+
+```{r}
+dm <- dist(df)
+
+#dm
+```
+
+```{r}
+hc <- hclust(dm)
+
+hc
+```
+
+```{r}
+plot(hc)
+abline(h=6, col="red")
+```
+
+Letʼs use cutree:
+
+Cut by height
+
+```{r}
+table(cutree(hc, h=6))
+```
+
+Cut by k
+
+```{r}
+cutree(hc, k=2)
+```
+
+4 clusters
+
+```{r}
+cutree(hc, k=4)
+```
+
+```{r}
+plot(df, col=cutree(hc, k=2))
+```
+
+# 1. PCA of UK food data
+
+```{r}
+url <- "https://tinyurl.com/UK-foods"
+x <- read.csv(url)
+```
+
+**Q1: How many rows and columns are in your new data frame named x? What R functions could you use to answer this questions?**
+
+```{r}
+# dim() used to find the number of rows and columns in x
+dim(x)
+```
+
+**Q2 setup**
+
+```{r}
+# removing the first column labeled "X"
+rownames(x) <- x[,1]
+x <- x[,-1]
+head(x)
+
+# checking the new dimensions of the data frame
+dim(x)
+```
+
+```{r}
+# Alternative approach to setting the correct row-names
+x <- read.csv(url, row.names=1)
+head(x)
+```
+
+**Q2: Which approach to solving the ‘row-names problem’ mentioned above do you prefer and why? Is one approach more robust than another under certain circumstances?**
+
+I prefer the alternative one because it requires much less code than the first. The original approach seems like it would be more robust for a variety of circumstances because it allows you to single out a column, no matter where it is on the data set.
+
+# Spotting major differences and trends
+
+```{r}
+# Using base R
+barplot(as.matrix(x), beside=T, col=rainbow(nrow(x)))
+```
+
+**Q3: Changing what optional argument in the above barplot() function results in the following plot?**
+
+```{r}
+# Changing beside to false to achieve a stacked plot
+barplot(as.matrix(x), beside=F, col=rainbow(nrow(x)))
+```
+
+```{r}
+library("tidyr")
+
+# Convert data to long format for ggplot with `pivot_longer()`
+x_long <- x |> 
+          tibble::rownames_to_column("Food") |> 
+          pivot_longer(cols = -Food, 
+                       names_to = "Country", 
+                       values_to = "Consumption")
+
+dim(x_long)
+
+head(x_long)
+```
+
+```{r}
+# Create grouped bar plot
+ggplot(x_long) +
+  aes(x = Country, y = Consumption, fill = Food) + geom_col(position = "dodge") +
+  theme_bw()
+```
+
+**Q4: Changing what optional argument in the above ggplot() code results in a stacked barplot figure?**
+
+```{r}
+# Changing position from "dodge" to "stack"
+ggplot(x_long) +
+  aes(x = Country, y = Consumption, fill = Food) + geom_col(position = "stack") +
+  theme_bw()
+```
+
+**Q5: We can use the pairs() function to generate all pairwise plots for our countries. Can you make sense of the following code and resulting figure? What does it mean if a given point lies on the diagonal for a given plot?**
+
+If a given point lies on the diagonal for a given plot, it means that the pointʼs value is identical to that of the one it is being compared to in the pairwise assessment.
+
+```{r}
+pairs(x, col=rainbow(nrow(x)), pch=16)
+```
+
+**Q6: Based on the pairs and heatmap figures, which countries cluster together and what does this suggest about their food consumption patterns? Can you easily tell what the main differences between N. Ireland and the other countries of the UK in terms of this data-set?**
+
+Wales and England cluster together and with Scotland, while North Ireland seems to be the least clustered with the rest of the countries in the UK, though it is pretty difficult to tell what the main differences are based on this figure.
+
+```{r}
+# Generating a heatmap
+library(pheatmap)
+
+pheatmap( as.matrix(x) )
+```
+
+# PCA to the rescue
+
+```{r}
+# Use the prcomp() PCA function 
+pca <- prcomp( t(x) )
+summary(pca)
+```
+
+**Q7: Complete the code below to generate a plot of PC1 vs PC2. The second line adds text labels over the data points.**
+
+```{r}
+# Create a data frame for plotting
+df <- as.data.frame(pca$x)
+df$Country <- rownames(df)
+
+# Plot PC1 vs PC2 with ggplot
+ggplot(pca$x) +
+  aes(x = PC1, y = PC2, label = rownames(pca$x)) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5) +
+  xlim(-270, 500) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme_bw()
+```
+
+**Q8: Customize your plot so that the colors of the country names match the colors in our UK and Ireland map and table at start of this document.**
+
+```{r}
+ggplot(pca$x) +
+  aes(x = PC1, y = PC2, label = rownames(pca$x), 
+  # coloring by country
+      color=df$Country) +
+  geom_point(size = 3) +
+  geom_text(vjust = -0.5) +
+  xlim(-270, 500) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme_bw() +
+  # assigning colors
+  scale_color_manual(values=c("yellow","green", "blue","red"))
+```
+
+```{r}
+v <- round( pca$sdev^2/sum(pca$sdev^2) * 100 )
+v
+```
+
+```{r}
+z <- summary(pca)
+z$importance
+```
+
+```{r}
+# Create scree plot with ggplot
+variance_df <- data.frame(
+  PC = factor(paste0("PC", 1:length(v)), levels = paste0("PC", 1:length(v))),
+  Variance = v
+)
+
+ggplot(variance_df) +
+  aes(x = PC, y = Variance) +
+  geom_col(fill = "steelblue") +
+  xlab("Principal Component") +
+  ylab("Percent Variation") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0))
+```
+
+```{r}
+## Lets focus on PC1 as it accounts for > 90% of variance 
+ggplot(pca$rotation) +
+  aes(x = PC1, 
+      y = reorder(rownames(pca$rotation), PC1)) +
+  geom_col(fill = "steelblue") +
+  xlab("PC1 Loading Score") +
+  ylab("") +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 9))
+```
+
+**Q9: Generate a similar ‘loadings plot’ for PC2. What two food groups feature prominantely and what does PC2 maninly tell us about?**
+
+The largest positive loading score is Soft_drinks and the largest negative score is Fresh_potatoes. PC2 thus tells us that when consumption of soft drinks increases, consumption of fresh potatoes decreases.
+
+```{r}
+# PC2 ʼloading plotʼ
+ggplot(pca$rotation) +
+  aes(x = PC2, 
+      y = reorder(rownames(pca$rotation), PC2)) +
+  geom_col(fill = "steelblue") +
+  xlab("PC2 Loading Score") +
+  ylab("") +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 9))
+```
