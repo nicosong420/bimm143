@@ -1,0 +1,167 @@
+---
+title: "class05"
+author: "Nicolas Song"
+format: pdf
+---
+
+# Creating Scatter Plots
+
+```{r}
+library(ggplot2)
+
+ggplot(cars) + aes(x=speed, y=dist) + geom_point() + 
+  geom_smooth(method="lm", se=FALSE) + 
+  labs(title="Speed and Stopping Distance of Cars", x="speed", 
+       y="stopping distance", caption="dataset: ʼcarsʼ") + theme_bw()
+```
+
+**Q: Which geometric layer should be used to create scatter plots in ggplot2?**
+
+Answer: geom_point()
+
+**Q: In your own RStudio can you add a trend line layer to help show the relationship between the plot variables with the geom_smooth() function?**
+
+Answer: geom_smooth()
+
+**Q: Argue with geom_smooth() to add a straight line from a linear model without the shaded standard error region?**
+
+Answer: geom_smooth(method="lm", se=FALSE)
+
+**Q: Can you finish this plot by adding various label annotations with the labs() function and changing the plot look to a more conservative "black & white" theme by adding the theme_bw function?**
+
+A: labs(title= "Speed and Stopping Distances of Cars", x="speed", y="stopping distance", caption="dataset: ʼcarsʼ") + theme_bw()
+
+# Adding more plot aesthetics through aes()
+
+```{r}
+url <- 
+  "https://bioboot.github.io/bimm143_S20/class-material/up_down_expression.txt"
+genes <- read.delim(url)
+head(genes)
+```
+
+**Q: Use the nrow() function to find out how many genes are in this dataset. What is your answer?**
+
+A: nrow(genes) -\> 5196
+
+**Q: Use the colnames() function and the ncol() function of the genes data frame to find out what the column names are and how many columns there are. How many columns did you find?**
+
+A: colnames(genes) -\> "Gene", "Condition1", "Condition2", "State"
+
+A: ncol(genes) -\> 4
+
+**Use the table() function on the State column of this data.frame to find out how many ʼupʼ regulated genes there are. What is your answer?**
+
+A: table(genes\$State) -\> 127 ʼupʼ
+
+**Using your values above and 2 significant figures. What fraction of total genes in up-regulated in this dataset?**
+
+A: round(table(genes\$State)/nrow(genes) \* 100, 2) -\> 2.44 ʼupʼ
+
+**Q: Complete the code below to produce the following plot**
+
+Answer:
+
+```{r}
+ggplot(genes) + aes(x=Condition1, y=Condition2) + geom_point()
+```
+
+```{r}
+p <- ggplot(genes) + aes(x=Condition1, y=Condition2, col=State) + geom_point() +
+  labs(title="Gene Expression Changes Upon Drug Treatment", 
+       x="Control (no drug)", y="Drug Treatment")
+p + scale_color_manual(values=c("blue", "gray", "red"))
+```
+
+# Going Further
+
+**Q: Complete the code below to produce a first basic scatter plot of this gapminder_2007 dataset:**
+
+Answer:
+
+```{r}
+library(gapminder)
+library(dplyr)
+gapminder2007 <- gapminder %>% filter(year==2007)
+ggplot(gapminder2007) + aes(x=gdpPercap, y=lifeExp) + geom_point(alpha=0.4)
+```
+
+# Adding more variables to aes()
+
+**Q: Can you adapt the code you have learned to reproduce our gapminder scatter plot for the year 1957? What do you notice about this plot is it easy to compare with the one for 2007?**
+
+A: Not very easy to compare because the graphs are scaled differently.
+
+A:
+
+```{r}
+library(gapminder)
+library(dplyr)
+gapminder1957 <- gapminder %>% filter(year==1957)
+ggplot(gapminder1957) + aes(x=gdpPercap, y=lifeExp, color=continent, size=pop) +
+  geom_point(alpha=0.7) + scale_size_area(max_size=10)
+```
+
+**Q: Do the same steps above but include 1957 and 2007 in your input dataset for ggplot(). You should now include the layer facet_wrap(\~year) to produce the following plot:**
+
+```{r}
+gapminder1957_2007 <- gapminder %>% filter(year==1957 | year==2007)
+
+ggplot(gapminder1957_2007) + aes(x=gdpPercap, y=lifeExp, color=continent, 
+   size=pop) + geom_point(alpha=0.7) + scale_size_area(max_size=10) +
+   facet_wrap(~year)
+```
+
+# Bar Charts
+
+```{r}
+gapminder_top5 <- 
+  gapminder %>% filter(year==2007) %>% arrange(desc(pop)) %>% top_n(5, pop)
+
+gapminder_top5
+```
+
+# Creating a simple bar chart
+
+**Q: Create a bar chart showing the life expectancy of the five biggest countries by population in 2007**
+
+```{r}
+ggplot(gapminder_top5) + geom_col(aes(x=country, y=lifeExp, fill=continent))
+```
+
+**Q: Plot population size by country. Create a bar chart showing the population (in millions) of the five biggest countries by population in 2007**
+
+```{r}
+ggplot(gapminder_top5) + aes(x=reorder(country, -pop), y=pop, fill=country) +
+  geom_col(col="gray30") + guides(fill="none")
+```
+
+# Flipping bar charts
+
+```{r}
+head(USArrests)
+USArrests$State <- rownames(USArrests)
+ggplot(USArrests) + aes(x=reorder(State,Murder), y=Murder) + geom_point() +
+  geom_segment(aes(x=State, xend=State, y=0, yend=Murder), color="blue") +
+  coord_flip()
+```
+
+# Extentions: Animation
+
+The following code was used to render the animation:
+
+ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, colour = country)) + geom_point(alpha = 0.7, show.legend = FALSE) + scale_colour_manual(values = country_colors) + scale_size(range = c(2, 12)) + scale_x_log10() + facet_wrap(~continent) + labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') + transition_time(year) + shadow_wake(wake_length = 0.1, alpha = FALSE)
+
+# Combining plots
+
+```{r}
+library(patchwork)
+
+p1 <- ggplot(mtcars) + geom_point(aes(mpg, disp))
+p2 <- ggplot(mtcars) + geom_boxplot(aes(gear, disp, group = gear))
+p3 <- ggplot(mtcars) + geom_smooth(aes(disp, qsec))
+p4 <- ggplot(mtcars) + geom_bar(aes(carb))
+
+(p1 | p2 | p3) /
+      p4
+```
