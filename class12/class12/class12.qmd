@@ -1,0 +1,330 @@
+---
+title: "class12"
+author: "Nicolas Song"
+format: pdf
+---
+
+# Import countData and colData
+
+```{r}
+counts <- read.csv("airway_scaledcounts.csv", row.names=1)
+metadata <- read.csv("airway_metadata.csv")
+```
+
+```{r}
+head(counts)
+```
+
+```{r}
+head(metadata)
+```
+
+**Q1. How many genes are in this dataset?**
+
+There are 38694 genes in this dataset.
+
+```{r}
+# Seeing how many genes
+nrow(counts)
+```
+
+**Q2. How many ‘control’ cell lines do we have?**
+
+There are 4 control cell lines.
+
+```{r}
+# Seeing how many of each cell line
+table(metadata$dex)
+```
+
+# Toy differential gene expression
+
+```{r}
+control <- metadata[metadata[,"dex"]=="control",]
+
+# Finding sample ID for treated
+control.counts <- counts[,control$id]
+
+# Calculating mean counts per gene for control samples
+control.mean <- rowSums(control.counts )/4 
+
+# Inspecting results
+head(control.mean)
+```
+
+**Which of these methods do you prefer and why?**
+
+I like the base R method better because it feels more straight-forward.
+
+**Q3. How would you make the above code in either approach more robust? Is there a function that could help here?**
+
+Using nrow(control) instead of 4 would make it so that if more samples were added, the correct number of genes would be input into the code since the number of genes would equal the number of controls.
+
+**Q4. Follow the same procedure for the treated samples (i.e. calculate the mean per gene across drug treated samples and assign to a labeled vector called treated.mean)**
+
+```{r}
+treated <- metadata[metadata[,"dex"]=="treated",]
+
+# Finding sample ID for treated
+treated.counts <- counts[,treated$id]
+
+# Calculating mean counts per gene for control samples
+treated.mean <- rowSums(treated.counts )/4 
+
+# Inspecting results
+head(treated.mean)
+```
+
+```{r}
+# Combining meancount data
+meancounts <- data.frame(control.mean, treated.mean)
+
+# Sum of mean counts across all genes for each group
+colSums(meancounts)
+```
+
+**Q5 (a). Create a scatter plot showing the mean of the treated samples against the mean of the control samples.**
+
+```{r}
+plot(meancounts[,1],meancounts[,2], xlab="Control", ylab="Treated")
+```
+
+**Q5 (b).You could also use the ggplot2 package to make this figure producing the plot below. What geom_?() function would you use for this plot?**
+
+geom_point()
+
+```{r}
+library(ggplot2)
+ggplot(meancounts, aes(control.mean, treated.mean)) + geom_point()
+```
+
+**Q6. Try plotting both axes on a log scale. What is the argument to plot() that allows you to do this?**
+
+log
+
+```{r}
+plot(meancounts[,1],meancounts[,2], xlab="Control", ylab="Treated", 
+ # Putting both axes on a log scale    
+     log="xy")
+```
+
+```{r}
+# Calculating log2 of the fold change
+meancounts$log2fc <- 
+  log2(meancounts[,"treated.mean"]/meancounts[,"control.mean"])
+
+# Inspecting results
+head(meancounts)
+```
+
+```{r}
+# Filtering data
+zero.vals <- which(meancounts[,1:2]==0, arr.ind=TRUE)
+to.rm <- unique(zero.vals[,1])
+mycounts <- meancounts[-to.rm,]
+head(mycounts)
+```
+
+**Q7. What is the purpose of the arr.ind argument in the which() function call above? Why would we then take the first column of the output and need to call the unique() function?**
+
+arr.ind makes it so that which() returns values in the rows and columns that have a zero count. Calling unique() on zero.vals makes it so that rows that have such a zero count in multiple samples are not counted multiple times.
+
+```{r}
+# Filtering for up-regulated genes
+up.ind <- mycounts$log2fc > 2
+
+# Filtering for down-regulated genes
+down.ind <- mycounts$log2fc < (-2)
+```
+
+**Q8. Using the up.ind vector above can you determine how many up regulated genes we have at the greater than 2 fc level?**
+
+250 up-regulated genes greater than 2 fc. 
+
+```{r}
+sum(up.ind==TRUE)
+```
+
+**Q9. Using the down.ind vector above can you determine how many down regulated genes we have at the greater than 2 fc level?**
+
+367 down-regulated genes greater than 2 fc.
+
+```{r}
+sum(down.ind==TRUE)
+```
+
+**Q10. Do you trust these results? Why or why not?**
+
+I do not fully trust these results because there has not been any procedure to test for statistical significance of these differences.
+
+# Importing data
+
+```{r}
+library(DESeq2)
+citation("DESeq2")
+```
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData=counts, 
+                              colData=metadata, 
+                              design=~dex)
+dds
+```
+
+# Principal Component Analysis (PCA)
+
+```{r}
+# Variance stabilizing transformation
+vsd <- vst(dds, blind = FALSE)
+
+# Plotting PCs
+plotPCA(vsd, intgroup = c("dex"))
+```
+
+```{r}
+pcaData <- plotPCA(vsd, intgroup=c("dex"), returnData=TRUE)
+head(pcaData)
+```
+
+```{r}
+# Calculate percent variance per PC for the plot axis labels
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+```
+
+```{r}
+# Plotting using ggplot
+ggplot(pcaData) +
+  aes(x = PC1, y = PC2, color = dex) +
+  geom_point(size =3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  coord_fixed() +
+  theme_bw()
+```
+
+# DESeq analysis
+
+```{r}
+dds <- DESeq(dds)
+```
+
+# Getting results
+
+```{r}
+res <- results(dds)
+head(res)
+```
+
+```{r}
+head(as.data.frame(res))
+```
+
+```{r}
+summary(res)
+```
+
+```{r}
+res05 <- results(dds, alpha=0.05)
+summary(res05)
+```
+
+# Adding annotation data
+
+```{r}
+library("AnnotationDbi")
+library("org.Hs.eg.db")
+columns(org.Hs.eg.db)
+```
+
+```{r}
+res$symbol <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     # Our genenames
+                     keytype="ENSEMBL",
+                     # The format of our genenames
+                     column="SYMBOL",
+                     # The new format we want to add
+                     multiVals="first")
+
+head(res)
+```
+
+**Q11. Run the mapIds() function two more times to add the Entrez ID and UniProt accession and GENENAME as new columns called res$entrez, res$uniprot and res$genename.**
+
+```{r}
+# Creating new columns using mapIds()
+res$entrez <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+
+res$uniprot <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     column="UNIPROT",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+
+res$genename <- mapIds(org.Hs.eg.db,
+                     keys=row.names(res),
+                     column="GENENAME",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+
+head(res)
+```
+
+```{r}
+ord <- order( res$padj )
+#View(res[ord,])
+head(res[ord,])
+```
+
+```{r}
+write.csv(res[ord,], "deseq_results.csv")
+```
+
+# Volcano Plots
+
+```{r}
+plot( res$log2FoldChange,  -log(res$padj), 
+      xlab="Log2(FoldChange)",
+      ylab="-Log(P-value)")
+```
+
+```{r}
+plot( res$log2FoldChange,  -log(res$padj), 
+ ylab="-Log(P-value)", xlab="Log2(FoldChange)")
+
+# Add some cut-off lines
+abline(v=c(-2,2), col="darkgray", lty=2)
+abline(h=-log(0.05), col="darkgray", lty=2)
+```
+
+```{r}
+# Setup our custom point color vector 
+mycols <- rep("gray", nrow(res))
+mycols[ abs(res$log2FoldChange) > 2 ]  <- "red" 
+
+inds <- (res$padj < 0.01) & (abs(res$log2FoldChange) > 2 )
+mycols[ inds ] <- "blue"
+
+# Volcano plot with custom colors 
+plot( res$log2FoldChange,  -log(res$padj), 
+ col=mycols, ylab="-Log(P-value)", xlab="Log2(FoldChange)" )
+
+# Cut-off lines
+abline(v=c(-2,2), col="gray", lty=2)
+abline(h=-log(0.1), col="gray", lty=2)
+```
+
+```{r}
+library(EnhancedVolcano)
+x <- as.data.frame(res)
+
+EnhancedVolcano(x,
+    lab = x$symbol,
+    x = 'log2FoldChange',
+    y = 'pvalue')
+```
+
