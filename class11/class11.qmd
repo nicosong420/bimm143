@@ -1,0 +1,193 @@
+---
+title: "class11"
+author: "Nicolas Song"
+format: pdf
+---
+
+# Interpreting results
+
+The following is my novel protein from the Find-a-Gene project:
+
+![Novel Protein](find_a_gene_protein.png)
+
+# Custom analysis of resulting models
+
+```{r}
+results_novel <- "find_a_gene_1a78a"
+
+# File names for all PDB models
+pdb_files <- list.files(path=results_novel,
+    pattern="*.pdb",
+    full.names = TRUE)
+
+# Printing PDB file names
+basename(pdb_files)
+```
+
+```{r}
+library(bio3d)
+
+# Read all data from Models 
+# and superpose/fit coords
+pdbs <- pdbaln(pdb_files, fit=TRUE, exefile="msa")
+
+pdbs
+```
+
+```{r}
+# Calculate RMSD between all pairs models
+rd <- rmsd(pdbs, fit=T)
+
+range(rd)
+```
+
+```{r}
+# Drawing a heatmap of RMSD matrix values
+library(pheatmap)
+
+colnames(rd) <- paste0("m",1:5)
+rownames(rd) <- paste0("m",1:5)
+pheatmap(rd)
+```
+
+```{r}
+# Read a reference PDB structure
+pdb <- read.pdb("6b91")
+```
+
+**Used most similar known protein, human METTL16**
+
+```{r}
+# Plotting pLDDT values across all models
+plotb3(pdbs$b[1,], typ="l", lwd=2, sse=pdb)
+points(pdbs$b[2,], typ="l", col="red")
+points(pdbs$b[3,], typ="l", col="blue")
+points(pdbs$b[4,], typ="l", col="darkgreen")
+points(pdbs$b[5,], typ="l", col="orange")
+abline(v=100, col="gray")
+```
+
+```{r}
+core <- core.find(pdbs)
+```
+
+```{r}
+core.inds <- print(core, vol=0.5)
+```
+
+```{r}
+xyz <- pdbfit(pdbs, core.inds, outpath="corefit_structures")
+```
+
+When corefit_structures opened in Mol\*, the following structure (already superimposed) was shown:
+
+![Core Fit Structure](find_a_gene_protein2.png)
+
+```{r}
+# Examining RMSF between positions of the structure
+rf <- rmsf(xyz)
+
+plotb3(rf, sse=pdb)
+abline(v=100, col="gray", ylab="RMSF")
+```
+
+# Predicted Alignment Error for domains
+
+```{r}
+library(jsonlite)
+
+# Listing of all PAE JSON files
+pae_files <- list.files(path=results_novel,
+    pattern=".*model.*\\.json",
+    full.names = TRUE)
+```
+
+```{r}
+# Reading 1st file
+pae1 <- read_json(pae_files[1],simplifyVector = TRUE)
+# Reading 5th file
+pae5 <- read_json(pae_files[5],simplifyVector = TRUE)
+
+attributes(pae1)
+```
+
+```{r}
+# Per-residue pLDDT scores 
+#  same as B-factor of PDB..
+head(pae1$plddt) 
+```
+
+```{r}
+# Max PAE value for model 1
+pae1$max_pae
+```
+
+```{r}
+# Max PAE value for model 5
+pae5$max_pae
+```
+
+```{r}
+# Plot PAE scores for model 1
+plot.dmat(pae1$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)")
+```
+
+```{r}
+# Plot PAE scores for model 5
+plot.dmat(pae5$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)",
+          grid.col = "black",
+          zlim=c(0,30))
+```
+
+```{r}
+# Model 1 PAE plot with same data range as model plot
+plot.dmat(pae1$pae, 
+          xlab="Residue Position (i)",
+          ylab="Residue Position (j)",
+          grid.col = "black",
+          zlim=c(0,30))
+```
+
+# Residue conservation from alignment file
+
+```{r}
+aln_file <- list.files(path=results_novel,
+      pattern=".a3m$",
+      full.names = TRUE)
+aln_file
+```
+
+```{r}
+aln <- read.fasta(aln_file[1], to.upper = TRUE)
+```
+
+```{r}
+# Seeing how many sequences
+dim(aln$ali)
+```
+
+```{r}
+# Scoring residue conservation
+sim <- conserv(aln)
+plotb3(sim[1:99], sse=trim.pdb(pdb, chain="A"),
+       ylab="Conservation Score")
+```
+
+```{r}
+# Consensus sequence
+con <- consensus(aln, cutoff = 0.9)
+con$seq
+```
+
+```{r}
+m1.pdb <- read.pdb(pdb_files[1])
+# Assigning a random alignment (lengths not equal)
+occ <- vec2resno(sim[1:145], m1.pdb$atom$resno)
+write.pdb(m1.pdb, o=occ, file="m1_conserv.pdb")
+```
+
+![M1 Conserved PDB](M1_CONSERV.PDB.png)
